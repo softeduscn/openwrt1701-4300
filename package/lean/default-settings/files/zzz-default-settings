@@ -1,0 +1,153 @@
+#!/bin/sh
+
+homeip='192.168.1.1'
+wanip='192.168.1.118'
+
+uci set fstab.@global[0].anon_mount='1'
+uci commit fstab
+
+uci set system.@system[0].hostname='HOME'
+uci set system.@system[0].timezone=CST-8
+uci set system.@system[0].zonename=Asia/Shanghai
+uci commit system
+
+uci set dhcp.wan.ra='relay'
+uci set dhcp.wan.dhcpv6='relay'
+uci set dhcp.wan.ndp='relay'
+uci set dhcp.wan.ignore='1'
+uci set dhcp.lan.ra='relay'
+uci set dhcp.lan.dhcpv6='relay'
+uci set dhcp.lan.ndp='relay'
+uci commit dhcp
+
+cat >> /etc/config/dhcp <<EOF
+config domain
+	option name 'mast'
+	option ip '192.168.1.119'
+
+config domain
+	option name 'home'
+	option ip '192.168.1.118'
+
+config domain
+	option name 'MI3K'
+	option ip '192.168.1.121'
+EOF
+
+uci set network.globals.ula_prefix=''
+uci set network.wan.hostname="VAIOHOME"
+uci set network.wan.proto='static'
+uci set network.wan.ipaddr=$wanip
+uci set network.wan.netmask='255.255.255.0'
+uci set network.wan.gateway=$homeip
+uci del network.wan.dns
+uci add_list network.wan.dns=$homeip
+uci set network.wan.force_link='0'
+uci set network.wan.stp='1'
+uci set network.wan.ifname='eth0.2'
+uci set network.wan.delegate='1'
+uci set network.wan.type='bridge'
+uci set network.wan6.ifname='br-wan'
+uci set network.wan6.delegate='1'
+uci set network.wan6.force_link='0'
+uci set network.lan.stp='1'
+uci set network.lan.igmp_snooping='0'
+uci set network.lan.ip6assign='64'
+uci set network.lan.ipaddr='192.168.88.1'
+uci set network.lan.force_link='0'
+uci set network.lan.delegate='1'
+uci del network.lan.dns
+uci add_list network.lan.dns=$wanip
+uci commit network
+
+uci set wireless.radio0.noscan=1
+uci set wireless.radio0.country="CN"
+uci set wireless.radio0.htmode='HT40'
+uci set wireless.radio0.channel='11'
+uci set wireless.radio0.legacy_rates='0'
+uci set wireless.default_radio0.ssid='VAIOSW'
+uci set wireless.default_radio0.key='sonyvaiotz13w'
+uci set wireless.default_radio0.encryption='psk-mixed'
+uci set wireless.default_radio0.disassoc_low_ack='0'
+uci set wireless.radio0.disabled='1'
+uci set wireless.default_radio0.disabled='1'
+
+uci set wireless.radio1.noscan=1
+uci set wireless.radio1.country="CN"
+uci set wireless.radio1.htmode='HT40'
+uci set wireless.radio1.channel='157'
+uci set wireless.radio1.legacy_rates='0'
+uci set wireless.default_radio1.ssid='VAIOSW'
+uci set wireless.default_radio1.key='sonyvaiotz13w'
+uci set wireless.default_radio1.encryption='psk-mixed'
+uci set wireless.default_radio1.disassoc_low_ack='0'
+uci set wireless.radio1.disabled='1'
+uci set wireless.default_radio1.disabled='1'
+uci commit wireless
+
+uci set firewall.@defaults[0].flow_offloading='1'
+uci set firewall.@defaults[0].synflood_protect='1'
+uci set firewall.@defaults[0].input='ACCEPT'
+uci set firewall.@defaults[0].output='ACCEPT'
+uci set firewall.@defaults[0].forward='ACCEPT'
+uci set firewall.@zone[0].input='ACCEPT'
+uci set firewall.@zone[0].output='ACCEPT'
+uci set firewall.@zone[0].forward='ACCEPT'
+uci set firewall.@zone[1].input='ACCEPT'
+uci set firewall.@zone[1].output='ACCEPT'
+uci set firewall.@zone[1].forward='REJECT'
+uci del firewall.@rule[1].family
+uci commit firewall
+
+file1='/etc/config/network'
+temp=$(sed -n -e "/option name 'switch0'/=" $file1)
+val1=`expr $temp - 1`
+tmp=$val1',$d'
+sed -i $tmp $file1
+
+cat >> /etc/config/network <<EOF
+config switch
+	option name 'switch0'
+	option reset '1'
+	option enable_vlan '1'
+
+config switch_vlan
+	option device 'switch0'
+	option vlan '1'
+	option vid '1'
+	option ports '0t'
+
+config switch_vlan
+	option device 'switch0'
+	option vlan '2'
+	option vid '2'
+	option ports '0t 1 2 3 4 5'
+EOF
+
+[ -f /etc/init.d/ttyd ] && {
+cat > /etc/config/ttyd <<EOF
+config ttyd
+	option command '/bin/login'
+	option debug '7'
+	option ipv6 '1'
+EOF
+}
+
+utc_secs=$(date +%s)
+days=$(( utc_secs / 86400 ))
+pass='$1$TADtMues$II9qrw8S7H3hYtJASm0tw.'
+sed -i "s/root.*$/root:$pass:${days}:0:99999:7:::/g" /etc/shadow
+
+#disable WIFI
+#sed -i '/option disabled/d' /etc/config/wireless
+sed -i '/set wireless.radio${devidx}.disabled/d' /lib/wifi/mac80211.sh
+wifi up
+
+#sed -i '/--to-ports/d' /etc/firewall.user
+#echo "iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-ports 53" >> /etc/firewall.user
+#echo "iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-ports 53" >> /etc/firewall.user
+
+sed -i -e '/option Interface/d' /etc/config/dropbear
+/etc/init.d/dropbear restart
+
+exit 0
