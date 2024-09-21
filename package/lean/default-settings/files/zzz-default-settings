@@ -31,7 +31,7 @@ config domain
 
 config domain
 	option name 'MI3K'
-	option ip '192.168.1.121'
+	option ip '192.168.1.120'
 EOF
 
 uci set network.globals.ula_prefix=''
