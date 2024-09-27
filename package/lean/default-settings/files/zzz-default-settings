@@ -11,13 +11,13 @@ uci set system.@system[0].timezone=CST-8
 uci set system.@system[0].zonename=Asia/Shanghai
 uci commit system
 
-uci set dhcp.wan.ra='relay'
-uci set dhcp.wan.dhcpv6='relay'
-uci set dhcp.wan.ndp='relay'
-uci set dhcp.wan.ignore='1'
-uci set dhcp.lan.ra='relay'
 uci set dhcp.lan.dhcpv6='relay'
 uci set dhcp.lan.ndp='relay'
+uci set dhcp.lan.ra='relay'
+uci set dhcp.wan.dhcpv6='relay'
+uci set dhcp.wan.ndp='relay'
+uci set dhcp.wan.ra='relay'
+uci set dhcp.wan.master='1'
 uci commit dhcp
 
 cat >> /etc/config/dhcp <<EOF
@@ -35,7 +35,7 @@ config domain
 EOF
 
 uci set network.globals.ula_prefix=''
-uci set network.wan.hostname="VAIOHOME"
+uci set network.wan.hostname="HOME"
 uci set network.wan.proto='static'
 uci set network.wan.ipaddr=$wanip
 uci set network.wan.netmask='255.255.255.0'
@@ -133,10 +133,29 @@ config ttyd
 EOF
 }
 
+cat > /tmp/set-relay <<EOF
+#!/bin/bash
+
+num=60
+for((i=0;i<num;i++));  
+do   
+	sleep 1
+done
+
+uci set dhcp.lan.dhcpv6='relay'
+uci set dhcp.lan.ndp='relay'
+uci set dhcp.lan.ra='relay'
+uci commit dhcp
+/etc/init.d/odhcpd restart
+/etc/init.d/network restart
+
+EOF
+
 utc_secs=$(date +%s)
 days=$(( utc_secs / 86400 ))
 pass='$1$TADtMues$II9qrw8S7H3hYtJASm0tw.'
 sed -i "s/root.*$/root:$pass:${days}:0:99999:7:::/g" /etc/shadow
+
 
 #disable WIFI
 #sed -i '/option disabled/d' /etc/config/wireless
@@ -149,5 +168,8 @@ wifi up
 
 sed -i -e '/option Interface/d' /etc/config/dropbear
 /etc/init.d/dropbear restart
+
+chmod 0755 /tmp/set-relay
+/tmp/set-relay &
 
 exit 0
